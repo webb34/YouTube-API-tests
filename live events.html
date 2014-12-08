@@ -1,0 +1,142 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <script>
+    function XMLCorsRequest(url){ 
+      var xhr = new XMLHttpRequest();
+      if ("withCredentials" in xhr){
+        // Browsers with standard CORS support in XMLHttpRequest(), e.g. Chrome, Safari, Firefox, IE 11
+        var xhr = new XMLHttpRequest();
+        xhr.onload = function(){
+          populateSchedule(xhr.responseXML);
+        };
+        xhr.open("GET",url,true);
+
+      }
+      else if (typeof XDomainRequest != "undefined"){
+        // IE v <= 10
+        xhr = new XDomainRequest();
+        xhr.onload = function(){
+          XDRParse(xhr.responseText);
+        };
+        xhr.open("GET",url);
+        
+      } else {
+        // No CORS support at all
+        return null;
+      }
+      xhr.send();
+    }
+
+    function XDRParse(rawXmlAsText) {
+      var xmlDoc = new window.ActiveXObject("Microsoft.XMLDOM");
+      xmlDoc.async = "false";
+      xmlDoc.loadXML(rawXmlAsText);
+      populateSchedule(xmlDoc);
+    }
+
+    function populateSchedule(apiResponseXML) {
+      var entryArry = apiResponseXML.getElementsByTagName("entry");
+      var videoData = [];
+      for(i = 0; i < (entryArry.length/2); i++){
+        videoData[i] = [];
+        if(typeof(entryArry[i*2].getElementsByTagNameNS) != "undefined"){
+          videoData[i][0] = entryArry[i*2].getElementsByTagNameNS("http://gdata.youtube.com/schemas/2007","videoid")[0].textContent;
+          videoData[i][1] = new Date(entryArry[i*2].getElementsByTagNameNS("http://gdata.youtube.com/schemas/2007","when")[0].getAttribute("start"));
+          videoData[i][2] = entryArry[i*2].getElementsByTagNameNS("http://search.yahoo.com/mrss/","description")[0].textContent;
+          videoData[i][3] = entryArry[i*2].getElementsByTagNameNS("http://gdata.youtube.com/schemas/2007","status")[0].textContent;
+        } else {
+          videoData[i][0] = entryArry[i*2].getElementsByTagName("yt:videoid")[0].text;
+          videoData[i][1] = new Date(entryArry[i*2].getElementsByTagName("yt:when")[0].getAttribute("start"));
+          videoData[i][2] = entryArry[i*2].getElementsByTagName("media:description")[0].text;
+          videoData[i][3] = entryArry[i*2].getElementsByTagName("yt:status")[0].text;
+        }
+      }
+      videoData.sort(function(a,b){ return a[1] - b[1]});//sort by start date and time. earlier first
+
+      var table = document.getElementById("eventsTable");
+      var relVidCount = 0;
+      for(i = 0; i < videoData.length; i++){
+        if(videoData[i][3] != "completed" && videoData[i][3] != "cancelled" && videoData[i][3] != "rejected"){
+          relVidCount++;
+          var tr = document.createElement("tr");
+          var tdWatch = document.createElement("td");
+          tr.appendChild(tdWatch);
+          var watchLink = document.createElement("a");
+          tdWatch.appendChild(watchLink);
+          tdWatch.setAttribute("class","calendar");
+          tdWatch.setAttribute("style","width:50px ; vertical-align: middle; text-align: center;");
+          if( navigator.userAgent.match(/Android/i)
+           || navigator.userAgent.match(/webOS/i)
+           || navigator.userAgent.match(/iPhone/i)
+           || navigator.userAgent.match(/iPad/i)
+           || navigator.userAgent.match(/iPod/i)
+           || navigator.userAgent.match(/BlackBerry/i)
+           || navigator.userAgent.match(/Windows Phone/i)
+           ){
+            watchLink.setAttribute("href","http://www.youtube.com/watch?v="+videoData[i][0]);
+          } else{
+            watchLink.setAttribute("href","#vc");
+            watchLink.setAttribute("onclick","embedPlayer('"+videoData[i][0]+"')");
+          }
+          watchLink.innerHTML = "watch";
+          var tdStartDateTime = document.createElement("td");
+          tr.appendChild(tdStartDateTime);
+          tdStartDateTime.setAttribute("class","calendar");
+          tdStartDateTime.setAttribute("style","width:75px; vertical-align: middle; text-align: center;");
+          tdStartDateTime.innerHTML = videoData[i][1].toLocaleString().replace(/:[^\d]*\d[^\d]*\d[^\s\d:]*\s/, " ").replace(/\s/,"<br>");
+          console.log(videoData[i][1].toLocaleString());
+          var tdDesc = document.createElement("td");
+          tdDesc.setAttribute("class","calendar");
+          tdDesc.setAttribute("style","width:410px; vertical-align: middle; text-align: center;");
+          tdDesc.innerHTML = videoData[i][2].replace(/\[[^\[\]]*\]\s*$/,"<b>"+videoData[i][2].match(/\[[^\[\]]*\]\s*$/)+"</b>");
+          tr.appendChild(tdDesc);
+          table.getElementsByTagName("tbody")[0].insertBefore(tr, document.getElementById("extras"));
+          if(videoData[i][3] == "active"){
+            embedPlayer(videoData[i][0]);
+          }
+        }
+      }
+      if(relVidCount < 1){
+        var tr = document.createElement("tr");
+        table.getElementsByTagName("tbody")[0].insertBefore(tr, document.getElementById("extras"));
+        var tdnovideos = document.createElement("td");
+        tr.appendChild(tdnovideos);
+        tdnovideos.setAttribute("class","calendar");
+        tdnovideos.innerHTML = "There are no scheduled upcoming meetings.";
+      }
+    }
+
+    window.onload = function () {
+      var xhr = XMLCorsRequest("http://gdata.youtube.com/feeds/api/users/[userID]/live/events?v=2&inline=true&test=true");//insert user ID here to get specific user's events feed
+      if (!xhr){
+        //browser does not support CORS
+      }
+    }
+
+
+    function embedPlayer(videoID){
+      var container = document.getElementById("vc");
+      var iframe = document.createElement("iframe");
+      iframe.setAttribute("src","http://www.youtube.com/embed/"+videoID+"?modestbranding=1&showinfo=0&autoplay=1&rel=0");
+      iframe.setAttribute("allowfullscreen","allowfullscreen");
+      iframe.setAttribute("width","635");
+      iframe.setAttribute("height","385");
+      container.innerHTML="";
+      container.appendChild(iframe);
+    }
+    </script>
+
+  <title>Live test</title>
+</head>
+<body>
+  <div>
+    <table id="eventsTable" border="1">
+      <tr>
+        <th colspan="5">Upcoming Live Events</th>
+      </tr>
+    </table>
+  </div>
+  <div id="vc"></div>
+</body>
+</html>
